@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Warehouse Inventory Management System</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+    <!-- Login Modal -->
+    <div id="loginModal" class="modal">
+        <div class="modal-content">
+            <h2><i class="fas fa-warehouse"></i> Warehouse IMS</h2>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="username">Username:</label>
+                    <input type="text" id="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password:</label>
+                    <input type="password" id="password" required>
+                </div>
+                <div class="form-group">
+                    <label for="role">Role:</label>
+                    <select id="role" required>
+                        <option value="">Select Role</option>
+                        <option value="admin">Admin</option>
+                        <option value="worker">Warehouse Worker</option>
+                        <option value="supervisor">Supervisor</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary">Login</button>
+            </form>
+            <div class="demo-credentials">
+                <p><strong>Demo Credentials:</strong></p>
+                <p>Admin: admin / admin123</p>
+                <p>Worker: worker / worker123</p>
+                <p>Supervisor: supervisor / sup123</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Application -->
+    <div id="app" class="hidden">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1><i class="fas fa-warehouse"></i> Warehouse IMS</h1>
+                <div class="user-info">
+                    <span id="currentUser"></span>
+                    <span id="currentRole"></span>
+                    <button id="logoutBtn" class="btn btn-secondary">Logout</button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Navigation -->
+        <nav class="nav">
+            <button class="nav-btn active" data-section="dashboard">
+                <i class="fas fa-tachometer-alt"></i> Dashboard
+            </button>
+            <button class="nav-btn" data-section="inventory">
+                <i class="fas fa-boxes"></i> Inventory
+            </button>
+            <button class="nav-btn" data-section="barcode">
+                <i class="fas fa-barcode"></i> Barcode Scanner
+            </button>
+            <button class="nav-btn" data-section="reports">
+                <i class="fas fa-chart-bar"></i> Reports
+            </button>
+            <button class="nav-btn admin-only" data-section="permissions" style="display: none;">
+                <i class="fas fa-shield-alt"></i> Permissions
+            </button>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Dashboard Section -->
+            <section id="dashboard" class="section active">
+                <h2>Dashboard</h2>
+                <div class="dashboard-grid">
+                    <div class="card">
+                        <div class="card-header">
+                            <i class="fas fa-boxes"></i>
+                            <h3>Total Products</h3>
+                        </div>
+                        <div class="card-content">
+                            <span id="totalProducts" class="number">0</span>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <h3>Low Stock Alerts</h3>
+                        </div>
+                        <div class="card-content">
+                            <span id="lowStockCount" class="number warning">0</span>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <i class="fas fa-dollar-sign"></i>
+                            <h3>Total Value</h3>
+                        </div>
+                        <div class="card-content">
+                            <span id="totalValue" class="number">$0.00</span>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <i class="fas fa-chart-line"></i>
+                            <h3>Categories</h3>
+                        </div>
+                        <div class="card-content">
+                            <span id="categoryCount" class="number">0</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="dashboard-charts">
+                    <div class="chart-container">
+                        <h3>Stock Levels</h3>
+                        <canvas id="stockChart"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <h3>Recent Activity</h3>
+                        <div id="recentActivity" class="activity-list">
+                            <!-- Activity items will be populated here -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Inventory Section -->
+            <section id="inventory" class="section">
+                <div class="section-header">
+                    <h2>Inventory Management</h2>
+                    <div class="section-actions">
+                        <input type="text" id="searchInventory" placeholder="Search products..." class="search-input">
+                        <select id="categoryFilter" class="filter-select">
+                            <option value="">All Categories</option>
+                        </select>
+                        <div class="action-buttons-group">
+                            <button id="addProductBtn" class="btn btn-primary">
+                                <i class="fas fa-plus"></i> Add Product
+                            </button>
+                            <div class="import-export-group">
+                                <input type="file" id="importFile" accept=".xlsx,.xls" class="file-input" style="display: none;">
+                                <button id="importBtn" class="btn btn-info">
+                                    <i class="fas fa-upload"></i> Import from Excel
+                                </button>
+                                <button id="exportBtn" class="btn btn-success">
+                                    <i class="fas fa-download"></i> Export to Excel
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="table-container">
+                    <table id="inventoryTable" class="data-table">
+                        <thead>
+                            <tr>
+                                <th>SKU</th>
+                                <th>Product Name</th>
+                                <th>Category</th>
+                                <th>Quantity</th>
+                                <th>Price</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="inventoryTableBody">
+                            <!-- Table rows will be populated here -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+
+
+            <!-- Barcode Scanner Section -->
+            <section id="barcode" class="section">
+                <h2>Barcode Scanner</h2>
+                <div class="barcode-container">
+                    <div class="scanner-area">
+                        <div class="scanner-frame">
+                            <div class="scanner-line"></div>
+                        </div>
+                        <p>Simulated barcode scanner - Enter SKU manually below</p>
+                    </div>
+                    
+                    <div class="scan-form">
+                        <div class="form-group">
+                            <label for="barcodeInput">Enter SKU:</label>
+                            <input type="text" id="barcodeInput" placeholder="Scan or enter SKU">
+                            <button id="scanBtn" class="btn btn-primary">Scan</button>
+                        </div>
+                    </div>
+                    
+                    <div id="scanResult" class="scan-result hidden">
+                        <!-- Scan results will appear here -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Reports Section -->
+            <section id="reports" class="section">
+                <h2>Reports & Analytics</h2>
+                <div class="reports-grid">
+                    <div class="report-card">
+                        <h3>Low Stock Report</h3>
+                        <div id="lowStockReport" class="report-content">
+                            <!-- Low stock items will be listed here -->
+                        </div>
+                    </div>
+                    
+                    <div class="report-card">
+                        <h3>Category Distribution</h3>
+                        <canvas id="categoryChart"></canvas>
+                    </div>
+                    
+                    <div class="report-card">
+                        <h3>Value by Category</h3>
+                        <canvas id="valueChart"></canvas>
+                    </div>
+                    
+                    <div class="report-card">
+                        <h3>Stock Movement</h3>
+                        <div id="stockMovement" class="report-content">
+                            <!-- Stock movement history will be listed here -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Permissions Section -->
+            <section id="permissions" class="section">
+                <div class="section-header">
+                    <h2><i class="fas fa-shield-alt"></i> User Permissions Management</h2>
+                    <p class="section-description">Control what actions each user role can perform in the system.</p>
+                    <div class="section-actions">
+                        <button id="addPermissionBtn" class="btn btn-primary">
+                            <i class="fas fa-plus"></i> Add Permission
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="permissions-container">
+                    <div class="permissions-grid">
+                        <!-- Admin Permissions -->
+                        <div class="permission-card">
+                            <div class="permission-header">
+                                <h3><i class="fas fa-user-shield"></i> Administrator</h3>
+                                <span class="role-badge admin">Full Access</span>
+                            </div>
+                            <div class="permission-content">
+                                <p class="role-description">Administrators have full access to all system features and can manage user permissions.</p>
+                                <div class="permission-list">
+                                    <div class="permission-item">
+                                        <i class="fas fa-check text-success"></i>
+                                        <span>View all inventory</span>
+                                    </div>
+                                    <div class="permission-item">
+                                        <i class="fas fa-check text-success"></i>
+                                        <span>Add/Edit/Delete products</span>
+                                    </div>
+                                    <div class="permission-item">
+                                        <i class="fas fa-check text-success"></i>
+                                        <span>Import/Export Excel files</span>
+                                    </div>
+                                    <div class="permission-item">
+                                        <i class="fas fa-check text-success"></i>
+                                        <span>View all reports</span>
+                                    </div>
+                                    <div class="permission-item">
+                                        <i class="fas fa-check text-success"></i>
+                                        <span>Manage user permissions</span>
+                                    </div>
+                                    <div class="permission-item">
+                                        <i class="fas fa-check text-success"></i>
+                                        <span>Access barcode scanner</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Supervisor Permissions -->
+                        <div class="permission-card" data-role="supervisor">
+                            <div class="permission-header">
+                                <h3><i class="fas fa-user-tie"></i> Supervisor</h3>
+                                <span class="role-badge supervisor">Limited Admin</span>
+                            </div>
+                            <div class="permission-content">
+                                <p class="role-description">Supervisors can manage inventory and view reports, but cannot modify user permissions.</p>
+                                <div class="permission-list">
+                                    <div class="permission-item">
+                                        <i class="fas fa-check text-success"></i>
+                                        <span>View all inventory</span>
+                                    </div>
+                                    <div class="permission-item">
+                                        <i class="fas fa-check text-success"></i>
+                                        <span>Add/Edit products</span>
+                                    </div>
+                                    <div class="permission-item">
+                                        <i class="fas fa-check text-success"></i>
+                                        <span>Import/Export Excel files</span>
+                                    </div>
+                                    <div class="permission-item">
+                                        <i class="fas fa-check text-success"></i>
+                                        <span>View all reports</span>
+                                    </div>
+                                    <div class="permission-item">
+                                        <i class="fas fa-times text-danger"></i>
+                                        <span>Delete products</span>
+                                    </div>
+                                    <div class="permission-item">
+                                        <i class="fas fa-times text-danger"></i>
+                                        <span>Manage user permissions</span>
+                                    </div>
+                                    <div class="permission-item">
+                                        <i class="fas fa-check text-success"></i>
+                                        <span>Access barcode scanner</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Worker Permissions -->
+                        <div class="permission-card" data-role="worker">
+                            <div class="permission-header">
+                                <h3><i class="fas fa-user"></i> Warehouse Worker</h3>
+                                <span class="role-badge worker">Basic Access</span>
+                            </div>
+                            <div class="permission-content">
+                                <p class="role-description">Workers can view inventory, update quantities, and use basic features.</p>
+                                <div class="permission-list">
+                                    <div class="permission-item">
+                                        <i class="fas fa-check text-success"></i>
+                                        <span>View inventory</span>
+                                    </div>
+                                    <div class="permission-item">
+                                        <i class="fas fa-times text-danger"></i>
+                                        <span>Add/Edit/Delete products</span>
+                                    </div>
+                                    <div class="permission-item">
+                                        <i class="fas fa-times text-danger"></i>
+                                        <span>Import/Export Excel files</span>
+                                    </div>
+                                    <div class="permission-item">
+                                        <i class="fas fa-check text-success"></i>
+                                        <span>View basic reports</span>
+                                    </div>
+                                    <div class="permission-item">
+                                        <i class="fas fa-times text-danger"></i>
+                                        <span>Manage user permissions</span>
+                                    </div>
+                                    <div class="permission-item">
+                                        <i class="fas fa-check text-success"></i>
+                                        <span>Access barcode scanner</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Custom Permissions Editor -->
+                    <div class="permissions-editor">
+                        <h3><i class="fas fa-cogs"></i> Customize Permissions</h3>
+                        <p>Modify permissions for each role by checking/unchecking the boxes below:</p>
+                        
+                        <div class="permissions-table">
+                            <table class="permissions-table-content">
+                                <thead>
+                                    <tr>
+                                        <th>Permission</th>
+                                        <th>Admin</th>
+                                        <th>Supervisor</th>
+                                        <th>Worker</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>View Inventory</td>
+                                        <td><input type="checkbox" checked disabled></td>
+                                        <td><input type="checkbox" id="supervisor-view" checked></td>
+                                        <td><input type="checkbox" id="worker-view" checked></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Add Products</td>
+                                        <td><input type="checkbox" checked disabled></td>
+                                        <td><input type="checkbox" id="supervisor-add" checked></td>
+                                        <td><input type="checkbox" id="worker-add"></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Edit Products</td>
+                                        <td><input type="checkbox" checked disabled></td>
+                                        <td><input type="checkbox" id="supervisor-edit" checked></td>
+                                        <td><input type="checkbox" id="worker-edit"></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Delete Products</td>
+                                        <td><input type="checkbox" checked disabled></td>
+                                        <td><input type="checkbox" id="supervisor-delete"></td>
+                                        <td><input type="checkbox" id="worker-delete"></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Import Excel</td>
+                                        <td><input type="checkbox" checked disabled></td>
+                                        <td><input type="checkbox" id="supervisor-import" checked></td>
+                                        <td><input type="checkbox" id="worker-import"></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Export Excel</td>
+                                        <td><input type="checkbox" checked disabled></td>
+                                        <td><input type="checkbox" id="supervisor-export" checked></td>
+                                        <td><input type="checkbox" id="worker-export"></td>
+                                    </tr>
+                                    <tr>
+                                        <td>View Reports</td>
+                                        <td><input type="checkbox" checked disabled></td>
+                                        <td><input type="checkbox" id="supervisor-reports" checked></td>
+                                        <td><input type="checkbox" id="worker-reports" checked></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Barcode Scanner</td>
+                                        <td><input type="checkbox" checked disabled></td>
+                                        <td><input type="checkbox" id="supervisor-barcode" checked></td>
+                                        <td><input type="checkbox" id="worker-barcode" checked></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <div class="permissions-actions">
+                            <button type="button" id="savePermissions" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Save Permissions
+                            </button>
+                            <button type="button" id="resetPermissions" class="btn btn-secondary">
+                                <i class="fas fa-undo"></i> Reset to Default
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Edit Product Modal -->
+    <div id="editModal" class="modal hidden">
+        <div class="modal-content">
+            <h2>Edit Product</h2>
+            <form id="editProductForm">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="editSku">SKU</label>
+                        <input type="text" id="editSku" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label for="editProductName">Product Name</label>
+                        <input type="text" id="editProductName" required>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="editCategory">Category</label>
+                        <select id="editCategory" required>
+                            <option value="Electronics">Electronics</option>
+                            <option value="Clothing">Clothing</option>
+                            <option value="Home & Garden">Home & Garden</option>
+                            <option value="Sports">Sports</option>
+                            <option value="Books">Books</option>
+                            <option value="Automotive">Automotive</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="editQuantity">Quantity</label>
+                        <input type="number" id="editQuantity" min="0" required>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="editPrice">Price ($)</label>
+                        <input type="number" id="editPrice" min="0" step="0.01" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="editMinStock">Minimum Stock Level</label>
+                        <input type="number" id="editMinStock" min="0">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="editDescription">Description</label>
+                    <textarea id="editDescription" rows="3"></textarea>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Update Product</button>
+                    <button type="button" id="cancelEdit" class="btn btn-secondary">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Import Modal -->
+    <div id="importModal" class="modal hidden">
+        <div class="modal-content import-modal">
+            <!-- Header with close button -->
+            <div class="modal-header">
+                <h2><i class="fas fa-upload"></i> Import Inventory from Excel</h2>
+                <button type="button" class="close-btn" id="closeImportModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <!-- Step indicator -->
+            <div class="import-steps">
+                <div class="step active" data-step="1">
+                    <span class="step-number">1</span>
+                    <span class="step-text">Setup</span>
+                </div>
+                <div class="step" data-step="2">
+                    <span class="step-number">2</span>
+                    <span class="step-text">Upload</span>
+                </div>
+                <div class="step" data-step="3">
+                    <span class="step-number">3</span>
+                    <span class="step-text">Import</span>
+                </div>
+            </div>
+            
+            <!-- Step 1: Setup -->
+            <div class="import-step-content" id="step1">
+                <div class="import-instructions">
+                    <h3><i class="fas fa-info-circle"></i> How to Import</h3>
+                    <div class="instructions-grid">
+                        <div class="instruction-item">
+                            <i class="fas fa-file-excel"></i>
+                            <h4>File Format</h4>
+                            <p>Use Excel files (.xlsx or .xls) with proper column headers</p>
+                        </div>
+                        <div class="instruction-item">
+                            <i class="fas fa-columns"></i>
+                            <h4>Required Columns</h4>
+                            <p>SKU, Product Name, Category, Quantity, Price</p>
+                        </div>
+                        <div class="instruction-item">
+                            <i class="fas fa-plus-circle"></i>
+                            <h4>Optional Columns</h4>
+                            <p>Min Stock, Description</p>
+                        </div>
+                        <div class="instruction-item">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <h4>Important Notes</h4>
+                            <p>SKU must be unique, first row should be headers</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="import-options">
+                    <div class="option-group">
+                        <label for="importMode">Import Mode:</label>
+                        <select id="importMode" class="mode-select">
+                            <option value="update">🔄 Update existing products only</option>
+                            <option value="add">➕ Add new products only</option>
+                            <option value="replace">🔄 Replace all inventory</option>
+                        </select>
+                        <div class="mode-description">
+                            <p id="modeDescription">Update existing products with new data while keeping existing ones unchanged.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="template-section">
+                        <h4><i class="fas fa-download"></i> Get Started</h4>
+                        <p>Download our template to ensure your file is formatted correctly:</p>
+                        <button type="button" id="downloadTemplate" class="btn btn-outline">
+                            <i class="fas fa-download"></i> Download Excel Template
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Step 2: Upload -->
+            <div class="import-step-content hidden" id="step2">
+                <div class="file-upload-section">
+                    <h3><i class="fas fa-cloud-upload-alt"></i> Upload Your File</h3>
+                    
+                    <div class="file-upload-area">
+                        <input type="file" id="importFileModal" accept=".xlsx,.xls" class="file-input-modal">
+                        <div class="upload-placeholder">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                            <p>Click to select Excel file or drag and drop</p>
+                            <span class="file-info">Supported formats: .xlsx, .xls</span>
+                        </div>
+                    </div>
+                    
+                    <div id="filePreview" class="file-preview hidden">
+                        <h4>File Preview</h4>
+                        <div class="preview-content">
+                            <!-- File preview will be populated here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Step 3: Import -->
+            <div class="import-step-content hidden" id="step3">
+                <div class="import-confirmation">
+                    <h3><i class="fas fa-check-circle"></i> Ready to Import</h3>
+                    <div id="importSummary" class="import-summary">
+                        <!-- Import summary will be populated here -->
+                    </div>
+                </div>
+                
+                <div id="importProgress" class="import-progress hidden">
+                    <h4>Importing Data...</h4>
+                    <div class="progress-bar">
+                        <div class="progress-fill"></div>
+                    </div>
+                    <p class="progress-text">Processing...</p>
+                </div>
+                
+                <div id="importResults" class="import-results hidden">
+                    <!-- Results will be populated here -->
+                </div>
+            </div>
+            
+            <!-- Navigation buttons -->
+            <div class="form-actions">
+                <button type="button" id="prevStep" class="btn btn-secondary" disabled>
+                    <i class="fas fa-arrow-left"></i> Previous
+                </button>
+                <button type="button" id="nextStep" class="btn btn-primary">
+                    Next <i class="fas fa-arrow-right"></i>
+                </button>
+                <button type="button" id="startImport" class="btn btn-success hidden">
+                    <i class="fas fa-play"></i> Start Import
+                </button>
+                <button type="button" id="cancelImport" class="btn btn-secondary">
+                    <i class="fas fa-times"></i> Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Product Modal -->
+    <div id="addProductModal" class="modal hidden">
+        <div class="modal-content add-product-modal">
+            <!-- Header with close button -->
+            <div class="modal-header">
+                <h2><i class="fas fa-plus"></i> Add New Product</h2>
+                <button type="button" class="close-btn" id="closeAddProductModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <form id="addProductForm" class="form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="modalSku">SKU *</label>
+                        <input type="text" id="modalSku" required>
+                        <small class="form-help">Unique product identifier</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="modalProductName">Product Name *</label>
+                        <input type="text" id="modalProductName" required>
+                        <small class="form-help">Product name or description</small>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="modalCategory">Category *</label>
+                        <select id="modalCategory" required>
+                            <option value="">Select Category</option>
+                            <option value="Electronics">Electronics</option>
+                            <option value="Clothing">Clothing</option>
+                            <option value="Home & Garden">Home & Garden</option>
+                            <option value="Sports">Sports</option>
+                            <option value="Books">Books</option>
+                            <option value="Automotive">Automotive</option>
+                        </select>
+                        <small class="form-help">Product category</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="modalQuantity">Quantity *</label>
+                        <input type="number" id="modalQuantity" min="0" required>
+                        <small class="form-help">Current stock quantity</small>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="modalPrice">Price ($) *</label>
+                        <input type="number" id="modalPrice" min="0" step="0.01" required>
+                        <small class="form-help">Product price in dollars</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="modalMinStock">Minimum Stock Level</label>
+                        <input type="number" id="modalMinStock" min="0" value="10">
+                        <small class="form-help">Alert when stock falls below this level</small>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="modalDescription">Description</label>
+                    <textarea id="modalDescription" rows="3" placeholder="Optional product description..."></textarea>
+                    <small class="form-help">Additional product details</small>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Add Product
+                    </button>
+                    <button type="button" id="cancelAddProduct" class="btn btn-secondary">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add Permission Modal -->
+    <div id="addPermissionModal" class="modal hidden">
+        <div class="modal-content add-permission-modal">
+            <!-- Header with close button -->
+            <div class="modal-header">
+                <h2><i class="fas fa-shield-plus"></i> Add New Permission</h2>
+                <button type="button" class="close-btn" id="closeAddPermissionModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <form id="addPermissionForm" class="form">
+                <div class="form-group">
+                    <label for="newPermissionName">Permission Name *</label>
+                    <input type="text" id="newPermissionName" required placeholder="e.g., manage_users, view_analytics">
+                    <small class="form-help">Unique identifier for the permission (use lowercase with underscores)</small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="newPermissionDescription">Permission Description</label>
+                    <textarea id="newPermissionDescription" rows="3" placeholder="Describe what this permission allows users to do..."></textarea>
+                    <small class="form-help">Human-readable description of the permission</small>
+                </div>
+                
+                <div class="form-group">
+                    <label>Default Role Access</label>
+                    <div class="role-checkboxes">
+                        <div class="role-checkbox">
+                            <input type="checkbox" id="admin-default" checked disabled>
+                            <label for="admin-default">Administrator (Always enabled)</label>
+                        </div>
+                        <div class="role-checkbox">
+                            <input type="checkbox" id="supervisor-default">
+                            <label for="supervisor-default">Supervisor</label>
+                        </div>
+                        <div class="role-checkbox">
+                            <input type="checkbox" id="worker-default">
+                            <label for="worker-default">Worker</label>
+                        </div>
+                    </div>
+                    <small class="form-help">Select which roles should have this permission by default</small>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Add Permission
+                    </button>
+                    <button type="button" id="cancelAddPermission" class="btn btn-secondary">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html> 
