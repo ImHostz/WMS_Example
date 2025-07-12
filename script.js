@@ -69,6 +69,304 @@ const sampleProducts = [
     }
 ];
 
+// --- Permissions System ---
+const DEFAULT_PERMISSIONS = {
+    admin: {
+        view: true,
+        add: true,
+        edit: true,
+        delete: true,
+        import: true,
+        export: true,
+        reports: true,
+        barcode: true
+    },
+    supervisor: {
+        view: true,
+        add: true,
+        edit: true,
+        delete: false,
+        import: true,
+        export: true,
+        reports: true,
+        barcode: true
+    },
+    worker: {
+        view: true,
+        add: false,
+        edit: false,
+        delete: false,
+        import: false,
+        export: false,
+        reports: true,
+        barcode: true
+    }
+};
+
+function getPermissions() {
+    return JSON.parse(localStorage.getItem('wms_permissions')) || DEFAULT_PERMISSIONS;
+}
+
+function setPermissions(perms) {
+    localStorage.setItem('wms_permissions', JSON.stringify(perms));
+}
+
+function resetPermissions() {
+    setPermissions(DEFAULT_PERMISSIONS);
+    loadPermissionsUI();
+    showMessage('Permissions reset to default.', 'success');
+}
+
+function loadPermissionsUI() {
+    const perms = getPermissions();
+    
+    // Get all existing permissions from the current state
+    const allPermissions = new Set();
+    Object.values(perms).forEach(rolePerms => {
+        Object.keys(rolePerms).forEach(perm => allPermissions.add(perm));
+    });
+    
+    // Update existing checkboxes
+    allPermissions.forEach(perm => {
+        const supervisorCheckbox = document.getElementById(`supervisor-${perm}`);
+        const workerCheckbox = document.getElementById(`worker-${perm}`);
+        
+        if (supervisorCheckbox) {
+            supervisorCheckbox.checked = !!perms.supervisor[perm];
+        }
+        if (workerCheckbox) {
+            workerCheckbox.checked = !!perms.worker[perm];
+        }
+    });
+    
+    // Update role cards
+    updateRoleCards();
+}
+
+function savePermissionsFromUI() {
+    const perms = getPermissions();
+    
+    // Get all existing permissions from the current state
+    const allPermissions = new Set();
+    Object.values(perms).forEach(rolePerms => {
+        Object.keys(rolePerms).forEach(perm => allPermissions.add(perm));
+    });
+    
+    // Update permissions from checkboxes
+    allPermissions.forEach(perm => {
+        const supervisorCheckbox = document.getElementById(`supervisor-${perm}`);
+        const workerCheckbox = document.getElementById(`worker-${perm}`);
+        
+        if (supervisorCheckbox) {
+            perms.supervisor[perm] = supervisorCheckbox.checked;
+        }
+        if (workerCheckbox) {
+            perms.worker[perm] = workerCheckbox.checked;
+        }
+    });
+    
+    setPermissions(perms);
+    
+    // Update role cards dynamically
+    updateRoleCards();
+    
+    // Add activity
+    addActivity(`${currentUser} updated user permissions`);
+    
+    showMessage('Permissions saved successfully!', 'success');
+}
+
+function updateRoleCards() {
+    const perms = getPermissions();
+    
+    // Update Supervisor card
+    updateRoleCard('supervisor', perms.supervisor);
+    
+    // Update Worker card
+    updateRoleCard('worker', perms.worker);
+}
+
+function updateRoleCard(role, permissions) {
+    const card = document.querySelector(`.permission-card[data-role="${role}"]`);
+    if (!card) return;
+    
+    const permissionList = card.querySelector('.permission-list');
+    if (!permissionList) return;
+    
+    // Clear existing permissions
+    permissionList.innerHTML = '';
+    
+    // Define permission labels
+    const permissionLabels = {
+        view: 'View all inventory',
+        add: 'Add/Edit products',
+        edit: 'Edit products',
+        delete: 'Delete products',
+        import: 'Import/Export Excel files',
+        export: 'Export Excel files',
+        reports: 'View all reports',
+        barcode: 'Access barcode scanner'
+    };
+    
+    // Add each permission with appropriate icon
+    Object.entries(permissions).forEach(([perm, enabled]) => {
+        const permissionItem = document.createElement('div');
+        permissionItem.className = 'permission-item';
+        
+        const icon = document.createElement('i');
+        icon.className = enabled ? 'fas fa-check text-success' : 'fas fa-times text-danger';
+        
+        const span = document.createElement('span');
+        span.textContent = permissionLabels[perm] || perm;
+        
+        permissionItem.appendChild(icon);
+        permissionItem.appendChild(span);
+        permissionList.appendChild(permissionItem);
+    });
+    
+    // Add animation effect
+    card.classList.add('updated');
+    setTimeout(() => {
+        card.classList.remove('updated');
+    }, 500);
+}
+
+function showAddPermissionModal() {
+    document.getElementById('addPermissionModal').classList.remove('hidden');
+}
+
+function hideAddPermissionModal() {
+    document.getElementById('addPermissionModal').classList.add('hidden');
+    document.getElementById('addPermissionForm').reset();
+}
+
+function handleAddPermission(e) {
+    e.preventDefault();
+    
+    const permissionName = document.getElementById('newPermissionName').value.trim();
+    const permissionDescription = document.getElementById('newPermissionDescription').value.trim();
+    
+    if (!permissionName) {
+        showMessage('Permission name is required.', 'error');
+        return;
+    }
+    
+    // Get current permissions
+    const perms = getPermissions();
+    
+    // Get default role access settings
+    const supervisorDefault = document.getElementById('supervisor-default').checked;
+    const workerDefault = document.getElementById('worker-default').checked;
+    
+    // Add new permission to all roles with default values
+    perms.admin[permissionName.toLowerCase()] = true; // Admin always gets new permissions
+    perms.supervisor[permissionName.toLowerCase()] = supervisorDefault;
+    perms.worker[permissionName.toLowerCase()] = workerDefault;
+    
+    // Save updated permissions
+    setPermissions(perms);
+    
+    // Add new permission to the permissions table
+    addPermissionToTable(permissionName.toLowerCase(), permissionDescription);
+    
+    // Update UI
+    loadPermissionsUI();
+    updateRoleCards();
+    
+    // Add activity
+    addActivity(`${currentUser} added new permission: ${permissionName}`);
+    
+    hideAddPermissionModal();
+    showMessage(`Permission "${permissionName}" added successfully!`, 'success');
+}
+
+function addPermissionToTable(permissionName, description) {
+    const tableBody = document.querySelector('.permissions-table-content tbody');
+    if (!tableBody) return;
+    
+    // Create new row
+    const newRow = document.createElement('tr');
+    newRow.innerHTML = `
+        <td>${description || permissionName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</td>
+        <td><input type="checkbox" checked disabled></td>
+        <td><input type="checkbox" id="supervisor-${permissionName}"></td>
+        <td><input type="checkbox" id="worker-${permissionName}"></td>
+    `;
+    
+    // Add row to table
+    tableBody.appendChild(newRow);
+    
+    // Set default values based on current permissions
+    const perms = getPermissions();
+    const supervisorCheckbox = newRow.querySelector(`#supervisor-${permissionName}`);
+    const workerCheckbox = newRow.querySelector(`#worker-${permissionName}`);
+    
+    if (supervisorCheckbox) {
+        supervisorCheckbox.checked = !!perms.supervisor[permissionName];
+    }
+    if (workerCheckbox) {
+        workerCheckbox.checked = !!perms.worker[permissionName];
+    }
+}
+
+// Show/hide Permissions tab for admin only
+function updatePermissionsTabVisibility() {
+    const tab = document.querySelector('.nav-btn[data-section="permissions"]');
+    if (currentRole === 'admin') {
+        tab.classList.add('show');
+        tab.style.display = '';
+    } else {
+        tab.classList.remove('show');
+        tab.style.display = 'none';
+    }
+}
+
+// Enforce permissions in UI/actions
+function enforcePermissions() {
+    const perms = getPermissions();
+    const rolePerms = perms[currentRole] || {};
+    // Inventory actions
+    document.getElementById('addProductBtn').style.display = rolePerms.add ? '' : 'none';
+    document.querySelectorAll('.edit-btn').forEach(btn => btn.style.display = rolePerms.edit ? '' : 'none');
+    document.querySelectorAll('.delete-btn').forEach(btn => btn.style.display = rolePerms.delete ? '' : 'none');
+    document.getElementById('importBtn').style.display = rolePerms.import ? '' : 'none';
+    document.getElementById('exportBtn').style.display = rolePerms.export ? '' : 'none';
+    // Reports
+    document.querySelector('.nav-btn[data-section="reports"]').style.display = rolePerms.reports ? '' : 'none';
+    // Barcode
+    document.querySelector('.nav-btn[data-section="barcode"]').style.display = rolePerms.barcode ? '' : 'none';
+}
+
+// --- Permissions Event Listeners ---
+document.addEventListener('DOMContentLoaded', function() {
+    // Permissions tab logic
+    if (document.getElementById('savePermissions')) {
+        document.getElementById('savePermissions').addEventListener('click', savePermissionsFromUI);
+        document.getElementById('resetPermissions').addEventListener('click', resetPermissions);
+        loadPermissionsUI();
+    }
+    
+    // Add Permission functionality
+    if (document.getElementById('addPermissionBtn')) {
+        document.getElementById('addPermissionBtn').addEventListener('click', showAddPermissionModal);
+        document.getElementById('addPermissionForm').addEventListener('submit', handleAddPermission);
+        document.getElementById('closeAddPermissionModal').addEventListener('click', hideAddPermissionModal);
+        document.getElementById('cancelAddPermission').addEventListener('click', hideAddPermissionModal);
+    }
+});
+
+// Update permissions tab visibility and enforce permissions after login
+function afterLoginPermissions() {
+    updatePermissionsTabVisibility();
+    enforcePermissions();
+}
+
+// Call afterLoginPermissions() after successful login
+// In handleLogin, after setting currentUser/currentRole:
+// afterLoginPermissions();
+// Also call enforcePermissions() after any permission change or role switch
+
+
 // Initialize the application
 document.addEventListener('DOMContentLoaded', function() {
     initializeApp();
@@ -117,8 +415,11 @@ function setupEventListeners() {
         btn.addEventListener('click', () => switchSection(btn.dataset.section));
     });
     
-    // Add product form
+    // Add product functionality
+    document.getElementById('addProductBtn').addEventListener('click', showAddProductModal);
     document.getElementById('addProductForm').addEventListener('submit', handleAddProduct);
+    document.getElementById('closeAddProductModal').addEventListener('click', hideAddProductModal);
+    document.getElementById('cancelAddProduct').addEventListener('click', hideAddProductModal);
     
     // Edit product form
     document.getElementById('editProductForm').addEventListener('submit', handleEditProduct);
@@ -132,6 +433,32 @@ function setupEventListeners() {
     
     // Export button
     document.getElementById('exportBtn').addEventListener('click', exportToExcel);
+    
+    // Import functionality
+    document.getElementById('importBtn').addEventListener('click', showImportModal);
+    document.getElementById('importFileModal').addEventListener('change', handleFileSelect);
+    document.getElementById('startImport').addEventListener('click', startImport);
+    document.getElementById('cancelImport').addEventListener('click', hideImportModal);
+    document.getElementById('closeImportModal').addEventListener('click', hideImportModal);
+    document.getElementById('downloadTemplate').addEventListener('click', downloadTemplate);
+    document.getElementById('nextStep').addEventListener('click', nextStep);
+    document.getElementById('prevStep').addEventListener('click', prevStep);
+    document.getElementById('importMode').addEventListener('change', updateModeDescription);
+    
+    // Drag and drop functionality
+    setupDragAndDrop();
+    
+    // Step navigation
+    document.querySelectorAll('.step').forEach(step => {
+        step.addEventListener('click', () => {
+            const stepNumber = parseInt(step.dataset.step);
+            if (stepNumber <= currentStep || (stepNumber === 2 && selectedFile)) {
+                currentStep = stepNumber;
+                updateSteps();
+                showStep(currentStep);
+            }
+        });
+    });
     
     // Barcode scanner
     document.getElementById('scanBtn').addEventListener('click', handleBarcodeScan);
@@ -175,6 +502,9 @@ function handleLogin(e) {
         // Add login activity
         addActivity(`${username} logged in as ${role}`);
         
+        // Update permissions visibility and enforce permissions
+        afterLoginPermissions();
+        
         showMessage('Login successful!', 'success');
     } else {
         showMessage('Invalid credentials. Please try again.', 'error');
@@ -184,6 +514,10 @@ function handleLogin(e) {
 function handleLogout() {
     currentUser = null;
     currentRole = null;
+    
+    // Hide permissions tab and reset UI
+    updatePermissionsTabVisibility();
+    
     showLoginModal();
     showMessage('Logged out successfully.', 'success');
 }
@@ -286,6 +620,8 @@ function updateStockChart() {
 function renderInventoryTable() {
     const tbody = document.getElementById('inventoryTableBody');
     const categoryFilter = document.getElementById('categoryFilter');
+    const perms = getPermissions();
+    const rolePerms = perms[currentRole] || {};
     
     // Update category filter options
     const categories = ['', ...new Set(products.map(p => p.category))];
@@ -306,12 +642,12 @@ function renderInventoryTable() {
                 <td><span class="status-badge status-${status}">${status.replace('-', ' ')}</span></td>
                 <td>
                     <div class="action-buttons">
-                        <button class="action-btn edit-btn" onclick="editProduct('${product.sku}')">
+                        ${rolePerms.edit ? `<button class="action-btn edit-btn" onclick="editProduct('${product.sku}')">
                             <i class="fas fa-edit"></i>
-                        </button>
-                        <button class="action-btn delete-btn" onclick="deleteProduct('${product.sku}')">
+                        </button>` : ''}
+                        ${rolePerms.delete ? `<button class="action-btn delete-btn" onclick="deleteProduct('${product.sku}')">
                             <i class="fas fa-trash"></i>
-                        </button>
+                        </button>` : ''}
                     </div>
                 </td>
             </tr>
@@ -329,6 +665,8 @@ function filterInventory() {
     const searchTerm = document.getElementById('searchInventory').value.toLowerCase();
     const categoryFilter = document.getElementById('categoryFilter').value;
     const tbody = document.getElementById('inventoryTableBody');
+    const perms = getPermissions();
+    const rolePerms = perms[currentRole] || {};
     
     const filteredProducts = products.filter(product => {
         const matchesSearch = product.name.toLowerCase().includes(searchTerm) || 
@@ -349,12 +687,12 @@ function filterInventory() {
                 <td><span class="status-badge status-${status}">${status.replace('-', ' ')}</span></td>
                 <td>
                     <div class="action-buttons">
-                        <button class="action-btn edit-btn" onclick="editProduct('${product.sku}')">
+                        ${rolePerms.edit ? `<button class="action-btn edit-btn" onclick="editProduct('${product.sku}')">
                             <i class="fas fa-edit"></i>
-                        </button>
-                        <button class="action-btn delete-btn" onclick="deleteProduct('${product.sku}')">
+                        </button>` : ''}
+                        ${rolePerms.delete ? `<button class="action-btn delete-btn" onclick="deleteProduct('${product.sku}')">
                             <i class="fas fa-trash"></i>
-                        </button>
+                        </button>` : ''}
                     </div>
                 </td>
             </tr>
@@ -362,44 +700,99 @@ function filterInventory() {
     }).join('');
 }
 
+function showAddProductModal() {
+    // Check permissions
+    const perms = getPermissions();
+    const rolePerms = perms[currentRole] || {};
+    if (!rolePerms.add) {
+        showMessage('You do not have permission to add products.', 'error');
+        return;
+    }
+    
+    document.getElementById('addProductModal').classList.remove('hidden');
+    resetAddProductForm();
+}
+
+function hideAddProductModal() {
+    document.getElementById('addProductModal').classList.add('hidden');
+}
+
+function resetAddProductForm() {
+    document.getElementById('addProductForm').reset();
+    document.getElementById('modalMinStock').value = '10';
+}
+
 function handleAddProduct(e) {
     e.preventDefault();
     
-    const formData = new FormData(e.target);
-    const product = {
-        sku: formData.get('sku') || document.getElementById('sku').value,
-        name: formData.get('productName') || document.getElementById('productName').value,
-        category: formData.get('category') || document.getElementById('category').value,
-        quantity: parseInt(formData.get('quantity') || document.getElementById('quantity').value),
-        price: parseFloat(formData.get('price') || document.getElementById('price').value),
-        minStock: parseInt(formData.get('minStock') || document.getElementById('minStock').value),
-        description: formData.get('description') || document.getElementById('description').value
-    };
+    const sku = document.getElementById('modalSku').value.trim();
+    const name = document.getElementById('modalProductName').value.trim();
+    const category = document.getElementById('modalCategory').value;
+    const quantity = parseInt(document.getElementById('modalQuantity').value);
+    const price = parseFloat(document.getElementById('modalPrice').value);
+    const minStock = parseInt(document.getElementById('modalMinStock').value) || 10;
+    const description = document.getElementById('modalDescription').value.trim();
     
-    // Validate SKU uniqueness
-    if (products.find(p => p.sku === product.sku)) {
+    // Validate required fields
+    if (!sku || !name || !category || isNaN(quantity) || isNaN(price)) {
+        showMessage('Please fill in all required fields.', 'error');
+        return;
+    }
+    
+    // Check if SKU already exists
+    if (products.some(p => p.sku === sku)) {
         showMessage('SKU already exists. Please use a unique SKU.', 'error');
         return;
     }
     
-    products.push(product);
-    saveData();
+    // Validate quantity and price
+    if (quantity < 0 || price < 0) {
+        showMessage('Quantity and price must be non-negative.', 'error');
+        return;
+    }
     
-    // Add activity
-    addActivity(`${currentUser} added product: ${product.name} (${product.sku})`);
+    // Create new product
+    const newProduct = {
+        sku,
+        name,
+        category,
+        quantity,
+        price,
+        minStock,
+        description
+    };
+    
+    // Add to products array
+    products.push(newProduct);
+    
+    // Save data
+    saveData();
     
     // Update UI
     updateDashboard();
     renderInventoryTable();
     updateReports();
     
-    // Reset form
-    e.target.reset();
+    // Add activity
+    addActivity(`${currentUser} added new product: ${name} (${sku})`);
     
+    // Show success message
     showMessage('Product added successfully!', 'success');
+    
+    // Close modal and reset form
+    hideAddProductModal();
+    resetAddProductForm();
 }
 
 function editProduct(sku) {
+    // Check permissions
+    const perms = getPermissions();
+    const rolePerms = perms[currentRole] || {};
+    if (!rolePerms.edit) {
+        showMessage('You do not have permission to edit products.', 'error');
+        return;
+    }
+    
     const product = products.find(p => p.sku === sku);
     if (!product) return;
     
@@ -458,6 +851,14 @@ function handleEditProduct(e) {
 }
 
 function deleteProduct(sku) {
+    // Check permissions
+    const perms = getPermissions();
+    const rolePerms = perms[currentRole] || {};
+    if (!rolePerms.delete) {
+        showMessage('You do not have permission to delete products.', 'error');
+        return;
+    }
+    
     if (!confirm('Are you sure you want to delete this product?')) return;
     
     const productIndex = products.findIndex(p => p.sku === sku);
@@ -633,6 +1034,14 @@ function updateStockMovement() {
 }
 
 function exportToExcel() {
+    // Check permissions
+    const perms = getPermissions();
+    const rolePerms = perms[currentRole] || {};
+    if (!rolePerms.export) {
+        showMessage('You do not have permission to export Excel files.', 'error');
+        return;
+    }
+    
     const worksheet = XLSX.utils.json_to_sheet(products.map(product => ({
         SKU: product.sku,
         'Product Name': product.name,
@@ -709,4 +1118,592 @@ function showMessage(message, type = 'info') {
 
 // Make functions globally available for onclick handlers
 window.editProduct = editProduct;
-window.deleteProduct = deleteProduct; 
+window.deleteProduct = deleteProduct;
+
+// Import functionality
+let selectedFile = null;
+let importData = [];
+let currentStep = 1;
+
+function showImportModal() {
+    // Check permissions
+    const perms = getPermissions();
+    const rolePerms = perms[currentRole] || {};
+    if (!rolePerms.import) {
+        showMessage('You do not have permission to import Excel files.', 'error');
+        return;
+    }
+    
+    document.getElementById('importModal').classList.remove('hidden');
+    resetImportModal();
+    updateModeDescription();
+}
+
+function hideImportModal() {
+    document.getElementById('importModal').classList.add('hidden');
+    selectedFile = null;
+    importData = [];
+}
+
+function resetImportModal() {
+    currentStep = 1;
+    selectedFile = null;
+    importData = [];
+    
+    // Reset UI
+    document.getElementById('startImport').disabled = true;
+    document.getElementById('importProgress').classList.add('hidden');
+    document.getElementById('importResults').classList.add('hidden');
+    document.getElementById('importFileModal').value = '';
+    document.getElementById('filePreview').classList.add('hidden');
+    document.querySelector('.file-upload-area').classList.remove('dragover');
+    
+    // Reset steps
+    updateSteps();
+    showStep(1);
+    
+    // Reset upload placeholder
+    const uploadPlaceholder = document.querySelector('.upload-placeholder p');
+    uploadPlaceholder.textContent = 'Click to select Excel file or drag and drop';
+}
+
+function updateSteps() {
+    document.querySelectorAll('.step').forEach((step, index) => {
+        step.classList.remove('active', 'completed');
+        if (index + 1 === currentStep) {
+            step.classList.add('active');
+        } else if (index + 1 < currentStep) {
+            step.classList.add('completed');
+        }
+    });
+}
+
+function showStep(stepNumber) {
+    document.querySelectorAll('.import-step-content').forEach((content, index) => {
+        content.classList.add('hidden');
+        if (index + 1 === stepNumber) {
+            content.classList.remove('hidden');
+        }
+    });
+    
+    // Update navigation buttons
+    const prevBtn = document.getElementById('prevStep');
+    const nextBtn = document.getElementById('nextStep');
+    const startBtn = document.getElementById('startImport');
+    
+    prevBtn.disabled = stepNumber === 1;
+    nextBtn.classList.toggle('hidden', stepNumber === 3);
+    startBtn.classList.toggle('hidden', stepNumber !== 3);
+    
+    // Enable/disable start button based on file selection
+    if (stepNumber === 3) {
+        startBtn.disabled = !selectedFile || importData.length === 0;
+    }
+}
+
+function nextStep() {
+    if (currentStep < 3) {
+        currentStep++;
+        updateSteps();
+        showStep(currentStep);
+    }
+}
+
+function prevStep() {
+    if (currentStep > 1) {
+        currentStep--;
+        updateSteps();
+        showStep(currentStep);
+    }
+}
+
+function updateModeDescription() {
+    const mode = document.getElementById('importMode').value;
+    const description = document.getElementById('modeDescription');
+    
+    const descriptions = {
+        'update': 'Update existing products with new data while keeping existing ones unchanged.',
+        'add': 'Add only new products to your inventory. Existing products will be skipped.',
+        'replace': 'Add new products and update existing ones. This is the most comprehensive option.'
+    };
+    
+    description.textContent = descriptions[mode] || descriptions['update'];
+}
+
+function setupDragAndDrop() {
+    const uploadArea = document.querySelector('.file-upload-area');
+    const fileInput = document.getElementById('importFileModal');
+
+    uploadArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadArea.classList.add('dragover');
+    });
+
+    uploadArea.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        uploadArea.classList.remove('dragover');
+    });
+
+    uploadArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadArea.classList.remove('dragover');
+        
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            fileInput.files = files;
+            handleFileSelect();
+        }
+    });
+
+    uploadArea.addEventListener('click', () => {
+        fileInput.click();
+    });
+}
+
+function handleFileSelect() {
+    const fileInput = document.getElementById('importFileModal');
+    const file = fileInput.files[0];
+    
+    if (file) {
+        selectedFile = file;
+        
+        // Show file name
+        const uploadPlaceholder = document.querySelector('.upload-placeholder p');
+        uploadPlaceholder.textContent = `Selected: ${file.name}`;
+        
+        // Preview file contents
+        previewFile(file);
+        
+        // Enable next step if we're on step 2
+        if (currentStep === 2) {
+            document.getElementById('nextStep').disabled = false;
+        }
+    }
+}
+
+function previewFile(file) {
+    const reader = new FileReader();
+    
+    reader.onload = function(e) {
+        try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+            const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+            
+            if (jsonData.length < 2) {
+                showMessage('File must contain at least a header row and one data row.', 'error');
+                return;
+            }
+            
+            // Validate headers
+            const headers = jsonData[0];
+            const requiredHeaders = ['SKU', 'Product Name', 'Category', 'Quantity', 'Price'];
+            const missingHeaders = requiredHeaders.filter(header => 
+                !headers.some(h => h && h.toString().toLowerCase().includes(header.toLowerCase()))
+            );
+            
+            if (missingHeaders.length > 0) {
+                showMessage(`Missing required headers: ${missingHeaders.join(', ')}`, 'error');
+                return;
+            }
+            
+            // Convert to product format
+            importData = jsonData.slice(1).map(row => {
+                const product = {};
+                headers.forEach((header, index) => {
+                    if (header) {
+                        const value = row[index];
+                        switch (header.toString().toLowerCase()) {
+                            case 'sku':
+                                product.sku = value ? value.toString().trim() : '';
+                                break;
+                            case 'product name':
+                            case 'productname':
+                                product.name = value ? value.toString().trim() : '';
+                                break;
+                            case 'category':
+                                product.category = value ? value.toString().trim() : '';
+                                break;
+                            case 'quantity':
+                                product.quantity = parseInt(value) || 0;
+                                break;
+                            case 'price':
+                                product.price = parseFloat(value) || 0;
+                                break;
+                            case 'min stock':
+                            case 'minstock':
+                                product.minStock = parseInt(value) || 10;
+                                break;
+                            case 'description':
+                                product.description = value ? value.toString().trim() : '';
+                                break;
+                        }
+                    }
+                });
+                return product;
+            }).filter(product => product.sku && product.name); // Filter out empty rows
+            
+            showMessage(`File loaded successfully! Found ${importData.length} products to import.`, 'success');
+            
+            // Show file preview
+            showFilePreview(jsonData.slice(0, 5)); // Show first 5 rows
+            
+            // Update import summary if on step 3
+            if (currentStep === 3) {
+                updateImportSummary();
+            }
+            
+        } catch (error) {
+            showMessage('Error reading file. Please ensure it\'s a valid Excel file.', 'error');
+            console.error('File read error:', error);
+        }
+    };
+    
+    reader.readAsArrayBuffer(file);
+}
+
+function showFilePreview(data) {
+    const previewDiv = document.getElementById('filePreview');
+    const previewContent = document.querySelector('.preview-content');
+    
+    if (data.length === 0) {
+        previewContent.innerHTML = '<p>No data found in file.</p>';
+    } else {
+        const table = document.createElement('table');
+        table.style.width = '100%';
+        table.style.borderCollapse = 'collapse';
+        table.style.fontSize = '0.8rem';
+        
+        // Create header
+        const header = document.createElement('tr');
+        data[0].forEach(cell => {
+            const th = document.createElement('th');
+            th.textContent = cell || '';
+            th.style.border = '1px solid #ddd';
+            th.style.padding = '4px 8px';
+            th.style.backgroundColor = '#f8f9fa';
+            th.style.fontWeight = 'bold';
+            header.appendChild(th);
+        });
+        table.appendChild(header);
+        
+        // Create data rows
+        data.slice(1).forEach(row => {
+            const tr = document.createElement('tr');
+            row.forEach(cell => {
+                const td = document.createElement('td');
+                td.textContent = cell || '';
+                td.style.border = '1px solid #ddd';
+                td.style.padding = '4px 8px';
+                tr.appendChild(td);
+            });
+            table.appendChild(tr);
+        });
+        
+        previewContent.innerHTML = '';
+        previewContent.appendChild(table);
+    }
+    
+    previewDiv.classList.remove('hidden');
+}
+
+function updateImportSummary() {
+    const summaryDiv = document.getElementById('importSummary');
+    const importMode = document.getElementById('importMode').value;
+    
+    const existingProducts = products.filter(p => 
+        importData.some(importProduct => importProduct.sku === p.sku)
+    ).length;
+    
+    const newProducts = importData.filter(importProduct => 
+        !products.some(p => p.sku === importProduct.sku)
+    ).length;
+    
+    summaryDiv.innerHTML = `
+        <h4>Import Summary</h4>
+        <div class="summary-item">
+            <span class="summary-label">File Name:</span>
+            <span class="summary-value">${selectedFile.name}</span>
+        </div>
+        <div class="summary-item">
+            <span class="summary-label">Total Products:</span>
+            <span class="summary-value">${importData.length}</span>
+        </div>
+        <div class="summary-item">
+            <span class="summary-label">Import Mode:</span>
+            <span class="summary-value">${importMode.charAt(0).toUpperCase() + importMode.slice(1)}</span>
+        </div>
+        <div class="summary-item">
+            <span class="summary-label">Existing Products:</span>
+            <span class="summary-value">${existingProducts}</span>
+        </div>
+        <div class="summary-item">
+            <span class="summary-label">New Products:</span>
+            <span class="summary-value">${newProducts}</span>
+        </div>
+    `;
+}
+
+function startImport() {
+    if (!selectedFile || importData.length === 0) {
+        showMessage('Please select a valid file first.', 'error');
+        return;
+    }
+    
+    const importMode = document.getElementById('importMode').value;
+    const progressBar = document.querySelector('.progress-fill');
+    const progressText = document.querySelector('.progress-text');
+    const resultsDiv = document.getElementById('importResults');
+    
+    // Show progress and hide summary
+    document.getElementById('importProgress').classList.remove('hidden');
+    document.getElementById('importSummary').classList.add('hidden');
+    document.getElementById('startImport').disabled = true;
+    
+    let results = {
+        added: 0,
+        updated: 0,
+        errors: 0,
+        details: []
+    };
+    
+    // Process each product
+    importData.forEach((product, index) => {
+        const progress = ((index + 1) / importData.length) * 100;
+        progressBar.style.width = `${progress}%`;
+        progressText.textContent = `Processing ${index + 1} of ${importData.length}...`;
+        
+        try {
+            const result = processProduct(product, importMode);
+            results.details.push(result);
+            
+            if (result.status === 'success') {
+                if (result.action === 'added') results.added++;
+                if (result.action === 'updated') results.updated++;
+            } else {
+                results.errors++;
+            }
+        } catch (error) {
+            results.errors++;
+            results.details.push({
+                sku: product.sku,
+                status: 'error',
+                message: `Error: ${error.message}`
+            });
+        }
+    });
+    
+    // Show results
+    progressText.textContent = 'Import completed!';
+    showImportResults(results);
+    
+    // Update the application
+    updateDashboard();
+    renderInventoryTable();
+    updateReports();
+    
+    // Add activity
+    addActivity(`${currentUser} imported ${results.added + results.updated} products from Excel file`);
+    
+    showMessage(`Import completed! ${results.added} added, ${results.updated} updated, ${results.errors} errors.`, 'success');
+}
+
+function processProduct(product, importMode) {
+    // Validate product data
+    if (!product.sku || !product.name || !product.category) {
+        return {
+            sku: product.sku || 'Unknown',
+            status: 'error',
+            message: 'Missing required fields (SKU, Product Name, Category)'
+        };
+    }
+    
+    if (product.quantity < 0 || product.price < 0) {
+        return {
+            sku: product.sku,
+            status: 'error',
+            message: 'Quantity and Price must be non-negative'
+        };
+    }
+    
+    const existingProductIndex = products.findIndex(p => p.sku === product.sku);
+    
+    switch (importMode) {
+        case 'update':
+            if (existingProductIndex === -1) {
+                return {
+                    sku: product.sku,
+                    status: 'warning',
+                    message: 'Product not found - skipped (update mode)'
+                };
+            }
+            // Update existing product
+            products[existingProductIndex] = {
+                ...products[existingProductIndex],
+                name: product.name,
+                category: product.category,
+                quantity: product.quantity,
+                price: product.price,
+                minStock: product.minStock || products[existingProductIndex].minStock,
+                description: product.description || products[existingProductIndex].description
+            };
+            return {
+                sku: product.sku,
+                status: 'success',
+                action: 'updated',
+                message: 'Product updated successfully'
+            };
+            
+        case 'add':
+            if (existingProductIndex !== -1) {
+                return {
+                    sku: product.sku,
+                    status: 'warning',
+                    message: 'Product already exists - skipped (add mode)'
+                };
+            }
+            // Add new product
+            products.push({
+                sku: product.sku,
+                name: product.name,
+                category: product.category,
+                quantity: product.quantity,
+                price: product.price,
+                minStock: product.minStock || 10,
+                description: product.description || ''
+            });
+            return {
+                sku: product.sku,
+                status: 'success',
+                action: 'added',
+                message: 'Product added successfully'
+            };
+            
+        case 'replace':
+            if (existingProductIndex !== -1) {
+                // Update existing
+                products[existingProductIndex] = {
+                    ...products[existingProductIndex],
+                    name: product.name,
+                    category: product.category,
+                    quantity: product.quantity,
+                    price: product.price,
+                    minStock: product.minStock || products[existingProductIndex].minStock,
+                    description: product.description || products[existingProductIndex].description
+                };
+                return {
+                    sku: product.sku,
+                    status: 'success',
+                    action: 'updated',
+                    message: 'Product updated successfully'
+                };
+            } else {
+                // Add new
+                products.push({
+                    sku: product.sku,
+                    name: product.name,
+                    category: product.category,
+                    quantity: product.quantity,
+                    price: product.price,
+                    minStock: product.minStock || 10,
+                    description: product.description || ''
+                });
+                return {
+                    sku: product.sku,
+                    status: 'success',
+                    action: 'added',
+                    message: 'Product added successfully'
+                };
+            }
+    }
+}
+
+function showImportResults(results) {
+    const resultsDiv = document.getElementById('importResults');
+    const details = results.details.slice(0, 20); // Show first 20 results
+    
+    resultsDiv.innerHTML = `
+        <h3>Import Results</h3>
+        <div class="result-summary">
+            <p><strong>Total processed:</strong> ${results.details.length}</p>
+            <p><strong>Added:</strong> ${results.added}</p>
+            <p><strong>Updated:</strong> ${results.updated}</p>
+            <p><strong>Errors:</strong> ${results.errors}</p>
+        </div>
+        <div class="result-details">
+            ${details.map(result => `
+                <div class="result-item">
+                    <span class="result-status ${result.status}">${result.status.toUpperCase()}</span>
+                    <span class="result-message">${result.sku}: ${result.message}</span>
+                </div>
+            `).join('')}
+            ${results.details.length > 20 ? `<p><em>... and ${results.details.length - 20} more results</em></p>` : ''}
+        </div>
+    `;
+    
+    resultsDiv.classList.remove('hidden');
+}
+
+function downloadTemplate() {
+    const templateData = [
+        {
+            'SKU': 'LAP001',
+            'Product Name': 'Dell Latitude Laptop',
+            'Category': 'Electronics',
+            'Quantity': 25,
+            'Price': 899.99,
+            'Min Stock': 10,
+            'Description': 'Business laptop with Intel i7 processor'
+        },
+        {
+            'SKU': 'PHN001',
+            'Product Name': 'iPhone 15 Pro',
+            'Category': 'Electronics',
+            'Quantity': 8,
+            'Price': 999.99,
+            'Min Stock': 15,
+            'Description': 'Latest iPhone with advanced camera system'
+        },
+        {
+            'SKU': 'TSH001',
+            'Product Name': 'Cotton T-Shirt',
+            'Category': 'Clothing',
+            'Quantity': 150,
+            'Price': 19.99,
+            'Min Stock': 50,
+            'Description': 'Comfortable cotton t-shirt in various sizes'
+        }
+    ];
+    
+    const worksheet = XLSX.utils.json_to_sheet(templateData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Inventory Template');
+    
+    // Add instructions sheet
+    const instructionsData = [
+        ['Instructions for Importing Inventory'],
+        [''],
+        ['Required Columns:'],
+        ['SKU', 'Product Name', 'Category', 'Quantity', 'Price'],
+        [''],
+        ['Optional Columns:'],
+        ['Min Stock', 'Description'],
+        [''],
+        ['Notes:'],
+        ['- SKU must be unique for each product'],
+        ['- First row should contain column headers'],
+        ['- Quantity and Price must be non-negative numbers'],
+        ['- Category should match existing categories or will be added'],
+        ['- Min Stock defaults to 10 if not specified'],
+        ['- Description is optional']
+    ];
+    
+    const instructionsSheet = XLSX.utils.aoa_to_sheet(instructionsData);
+    XLSX.utils.book_append_sheet(workbook, instructionsSheet, 'Instructions');
+    
+    XLSX.writeFile(workbook, 'warehouse_inventory_template.xlsx');
+    
+    showMessage('Template downloaded successfully!', 'success');
+} 
