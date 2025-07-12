@@ -1,0 +1,23 @@
+{
+  "name": "wms_example",
+  "version": "1.0.0",
+  "description": "<<<<<<< HEAD # Warehouse Inventory Management System (WMS)",
+  "main": "script.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ImHostz/WMS_Example.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ImHostz/WMS_Example/issues"
+  },
+  "homepage": "https://github.com/ImHostz/WMS_Example#readme",
+  "dependencies": {
+    "express": "^5.1.0"
+  }
+}
