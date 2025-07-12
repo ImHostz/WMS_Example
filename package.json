@@ -1,10 +1,10 @@
 {
   "name": "wms_example",
   "version": "1.0.0",
-  "description": "<<<<<<< HEAD # Warehouse Inventory Management System (WMS)",
+  "description": "Warehouse Inventory Management System (WMS)",
   "main": "script.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"No tests yet\" && exit 0"
   },
   "repository": {
     "type": "git",
