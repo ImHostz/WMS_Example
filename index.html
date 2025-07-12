@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Warehouse Inventory Management System</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+    <!-- Login Modal -->
+    <div id="loginModal" class="modal">
+        <div class="modal-content">
+            <h2><i class="fas fa-warehouse"></i> Warehouse IMS</h2>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="username">Username:</label>
+                    <input type="text" id="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password:</label>
+                    <input type="password" id="password" required>
+                </div>
+                <div class="form-group">
+                    <label for="role">Role:</label>
+                    <select id="role" required>
+                        <option value="">Select Role</option>
+                        <option value="admin">Admin</option>
+                        <option value="worker">Warehouse Worker</option>
+                        <option value="supervisor">Supervisor</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary">Login</button>
+            </form>
+            <div class="demo-credentials">
+                <p><strong>Demo Credentials:</strong></p>
+                <p>Admin: admin / admin123</p>
+                <p>Worker: worker / worker123</p>
+                <p>Supervisor: supervisor / sup123</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Application -->
+    <div id="app" class="hidden">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1><i class="fas fa-warehouse"></i> Warehouse IMS</h1>
+                <div class="user-info">
+                    <span id="currentUser"></span>
+                    <span id="currentRole"></span>
+                    <button id="logoutBtn" class="btn btn-secondary">Logout</button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Navigation -->
+        <nav class="nav">
+            <button class="nav-btn active" data-section="dashboard">
+                <i class="fas fa-tachometer-alt"></i> Dashboard
+            </button>
+            <button class="nav-btn" data-section="inventory">
+                <i class="fas fa-boxes"></i> Inventory
+            </button>
+            <button class="nav-btn" data-section="add-product">
+                <i class="fas fa-plus"></i> Add Product
+            </button>
+            <button class="nav-btn" data-section="barcode">
+                <i class="fas fa-barcode"></i> Barcode Scanner
+            </button>
+            <button class="nav-btn" data-section="reports">
+                <i class="fas fa-chart-bar"></i> Reports
+            </button>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Dashboard Section -->
+            <section id="dashboard" class="section active">
+                <h2>Dashboard</h2>
+                <div class="dashboard-grid">
+                    <div class="card">
+                        <div class="card-header">
+                            <i class="fas fa-boxes"></i>
+                            <h3>Total Products</h3>
+                        </div>
+                        <div class="card-content">
+                            <span id="totalProducts" class="number">0</span>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <h3>Low Stock Alerts</h3>
+                        </div>
+                        <div class="card-content">
+                            <span id="lowStockCount" class="number warning">0</span>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <i class="fas fa-dollar-sign"></i>
+                            <h3>Total Value</h3>
+                        </div>
+                        <div class="card-content">
+                            <span id="totalValue" class="number">$0.00</span>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <i class="fas fa-chart-line"></i>
+                            <h3>Categories</h3>
+                        </div>
+                        <div class="card-content">
+                            <span id="categoryCount" class="number">0</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="dashboard-charts">
+                    <div class="chart-container">
+                        <h3>Stock Levels</h3>
+                        <canvas id="stockChart"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <h3>Recent Activity</h3>
+                        <div id="recentActivity" class="activity-list">
+                            <!-- Activity items will be populated here -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Inventory Section -->
+            <section id="inventory" class="section">
+                <div class="section-header">
+                    <h2>Inventory Management</h2>
+                    <div class="section-actions">
+                        <input type="text" id="searchInventory" placeholder="Search products..." class="search-input">
+                        <select id="categoryFilter" class="filter-select">
+                            <option value="">All Categories</option>
+                        </select>
+                        <button id="exportBtn" class="btn btn-success">
+                            <i class="fas fa-download"></i> Export to Excel
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="table-container">
+                    <table id="inventoryTable" class="data-table">
+                        <thead>
+                            <tr>
+                                <th>SKU</th>
+                                <th>Product Name</th>
+                                <th>Category</th>
+                                <th>Quantity</th>
+                                <th>Price</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="inventoryTableBody">
+                            <!-- Table rows will be populated here -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Add Product Section -->
+            <section id="add-product" class="section">
+                <h2>Add New Product</h2>
+                <form id="addProductForm" class="form">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="sku">SKU *</label>
+                            <input type="text" id="sku" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="productName">Product Name *</label>
+                            <input type="text" id="productName" required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="category">Category *</label>
+                            <select id="category" required>
+                                <option value="">Select Category</option>
+                                <option value="Electronics">Electronics</option>
+                                <option value="Clothing">Clothing</option>
+                                <option value="Home & Garden">Home & Garden</option>
+                                <option value="Sports">Sports</option>
+                                <option value="Books">Books</option>
+                                <option value="Automotive">Automotive</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="quantity">Quantity *</label>
+                            <input type="number" id="quantity" min="0" required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="price">Price ($) *</label>
+                            <input type="number" id="price" min="0" step="0.01" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="minStock">Minimum Stock Level</label>
+                            <input type="number" id="minStock" min="0" value="10">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="description">Description</label>
+                        <textarea id="description" rows="3"></textarea>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Add Product</button>
+                        <button type="reset" class="btn btn-secondary">Clear Form</button>
+                    </div>
+                </form>
+            </section>
+
+            <!-- Barcode Scanner Section -->
+            <section id="barcode" class="section">
+                <h2>Barcode Scanner</h2>
+                <div class="barcode-container">
+                    <div class="scanner-area">
+                        <div class="scanner-frame">
+                            <div class="scanner-line"></div>
+                        </div>
+                        <p>Simulated barcode scanner - Enter SKU manually below</p>
+                    </div>
+                    
+                    <div class="scan-form">
+                        <div class="form-group">
+                            <label for="barcodeInput">Enter SKU:</label>
+                            <input type="text" id="barcodeInput" placeholder="Scan or enter SKU">
+                            <button id="scanBtn" class="btn btn-primary">Scan</button>
+                        </div>
+                    </div>
+                    
+                    <div id="scanResult" class="scan-result hidden">
+                        <!-- Scan results will appear here -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Reports Section -->
+            <section id="reports" class="section">
+                <h2>Reports & Analytics</h2>
+                <div class="reports-grid">
+                    <div class="report-card">
+                        <h3>Low Stock Report</h3>
+                        <div id="lowStockReport" class="report-content">
+                            <!-- Low stock items will be listed here -->
+                        </div>
+                    </div>
+                    
+                    <div class="report-card">
+                        <h3>Category Distribution</h3>
+                        <canvas id="categoryChart"></canvas>
+                    </div>
+                    
+                    <div class="report-card">
+                        <h3>Value by Category</h3>
+                        <canvas id="valueChart"></canvas>
+                    </div>
+                    
+                    <div class="report-card">
+                        <h3>Stock Movement</h3>
+                        <div id="stockMovement" class="report-content">
+                            <!-- Stock movement history will be listed here -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Edit Product Modal -->
+    <div id="editModal" class="modal hidden">
+        <div class="modal-content">
+            <h2>Edit Product</h2>
+            <form id="editProductForm">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="editSku">SKU</label>
+                        <input type="text" id="editSku" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label for="editProductName">Product Name</label>
+                        <input type="text" id="editProductName" required>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="editCategory">Category</label>
+                        <select id="editCategory" required>
+                            <option value="Electronics">Electronics</option>
+                            <option value="Clothing">Clothing</option>
+                            <option value="Home & Garden">Home & Garden</option>
+                            <option value="Sports">Sports</option>
+                            <option value="Books">Books</option>
+                            <option value="Automotive">Automotive</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="editQuantity">Quantity</label>
+                        <input type="number" id="editQuantity" min="0" required>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="editPrice">Price ($)</label>
+                        <input type="number" id="editPrice" min="0" step="0.01" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="editMinStock">Minimum Stock Level</label>
+                        <input type="number" id="editMinStock" min="0">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="editDescription">Description</label>
+                    <textarea id="editDescription" rows="3"></textarea>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Update Product</button>
+                    <button type="button" id="cancelEdit" class="btn btn-secondary">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html> 
