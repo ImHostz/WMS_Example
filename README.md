@@ -43,16 +43,7 @@ A modern, web-based warehouse inventory management system built with HTML, CSS, 
 
 ## Getting Started
 
-### Prerequisites
-- Modern web browser (Chrome, Firefox, Safari, Edge)
-- No server setup required - runs entirely in the browser
-
-### Installation
-1. Download or clone the repository
-2. Open `index.html` in your web browser
-3. Use the demo credentials to log in
-
-### Demo Credentials
+### Credentials
 - **Admin**: `admin` / `admin123`
 - **Worker**: `worker` / `worker123`
 - **Supervisor**: `supervisor` / `sup123`
@@ -143,27 +134,3 @@ WMS_Example/
 ├── script.js           # Application logic
 └── README.md           # Documentation
 ```
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
-
-## License
-
-This project is open source and available under the MIT License.
-
-## Support
-
-For issues or questions:
-1. Check the documentation
-2. Review the demo credentials
-3. Test with the provided sample data
-4. Create an issue in the repository
-
----
-
-**Note**: This is a demonstration system. For production use, consider implementing proper backend services, database storage, and security measures.
